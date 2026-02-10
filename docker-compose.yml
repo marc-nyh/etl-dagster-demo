@@ -26,6 +26,15 @@ services:
       - postgres
     restart: unless-stopped
 
+  dagster:
+    build: ./dagster
+    container_name: etl_dagster
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
 
 volumes:
   postgres_data:
