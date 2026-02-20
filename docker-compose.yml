@@ -13,6 +13,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
+    networks:
+      - etl_network
 
   pgadmin:
     image: dpage/pgadmin4:8
@@ -25,6 +27,8 @@ services:
     depends_on:
       - postgres
     restart: unless-stopped
+    networks:
+      - etl_network
 
   dagster:
     build: ./dagster
@@ -34,7 +38,13 @@ services:
     depends_on:
       - postgres
     restart: unless-stopped
+    networks:
+      - etl_network
 
 
 volumes:
   postgres_data:
+
+networks:
+  etl_network:
+    driver: bridge

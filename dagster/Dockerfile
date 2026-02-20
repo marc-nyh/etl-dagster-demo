@@ -8,4 +8,4 @@ COPY . .
 
 EXPOSE 3000
 
-CMD ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-m", "etl_project"]
+CMD ["dagster", "dev", "-h", "0.0.0.0", "-p", "3000", "-m", "etl_project"]
