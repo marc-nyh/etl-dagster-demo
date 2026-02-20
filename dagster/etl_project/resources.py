@@ -17,3 +17,12 @@ class PostgresResource(ConfigurableResource):
             password=self.password,
             dbname=self.database
         )
+
+# Define the resource configuration
+# In a real app, use EnvVar("POSTGRES_PASSWORD") instead of hardcoding!
+db_resource = PostgresResource(
+    host="postgres",  # Docker service name
+    user="etl_user",
+    password="etl_password",
+    database="etl_db"
+)

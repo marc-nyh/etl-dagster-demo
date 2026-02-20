@@ -26,8 +26,10 @@ CREATE TABLE invalid_uld (
 -- Create enriched ULD table for validated data with Airline info
 CREATE TABLE enriched_uld (
   id INT,
-  uld_code TEXT,
+  uld_code TEXT,          -- Final (cleaned/fixed) code
   airline_code TEXT,
-  airline_name TEXT
+  airline_name TEXT,
+  original_code TEXT,     -- The original raw code (before any repair)
+  action_taken TEXT       -- "Valid" or "Repaired: Removed Spaces"
 );
 
