@@ -5,7 +5,7 @@ from ..resources import PostgresResource
 
 # --- Constants ---
 
-# Updated to support 2 OR 3 letter owner codes (e.g. SQ, DHL)
+# Example ULD codes: [AKN 12345 DL]
 ULD_PATTERN = re.compile(r"^[A-Z]{3}[0-9]{5}[A-Z]{2,3}$")
 
 AIRLINE_CODES = {
@@ -23,11 +23,18 @@ AIRLINE_CODES = {
 
 # 1. Extract
 @asset
+# Dagster uses the type annotation to determine what resource to inject (With modern ConfigurableResource usage), hence PostgresResource is important
 def raw_uld_records(database: PostgresResource) -> List[Tuple[int, str]]:
-    """Extracts raw ULD records from PostgreSQL."""
+    """Extracts raw ULD records from PostgreSQL and clears output tables for a fresh run."""
     conn = database.get_connection()
     cur = conn.cursor()
     try:
+        # Clear all output tables before the pipeline runs
+        cur.execute("DELETE FROM clean_uld")
+        cur.execute("DELETE FROM enriched_uld")
+        cur.execute("DELETE FROM invalid_uld")
+        conn.commit() # Permanantly saves changes, w/o it, changes lose when conn.close()
+
         cur.execute("SELECT id, uld_code FROM raw_uld")
         return cur.fetchall()
     finally:
@@ -51,12 +58,16 @@ def validated_uld_records(raw_uld_records: List[Tuple[int, str]]):
         if not code:
             continue
 
+        original = code   # Keep the raw original (with any spaces/casing) for tracking
         cleaned = code.strip().upper()
 
         if ULD_PATTERN.match(cleaned):
+            # Pass (id, cleaned_code) — already confirmed valid
             valid.append((id_, cleaned))
         else:
-            invalid.append((id_, cleaned, "Invalid ULD format"))
+            # Pass (id, cleaned_code, original_raw_code, reason)
+            # We include the original so process_invalid_records can store it as original_code
+            invalid.append((id_, cleaned, original, "Invalid ULD format"))
 
     yield Output(valid, "valid_records")
     yield Output(invalid, "invalid_records")
@@ -77,9 +88,6 @@ def process_valid_records(database: PostgresResource, valid_records: List[Tuple[
     conn = database.get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("DELETE FROM clean_uld")
-        cur.execute("DELETE FROM enriched_uld")
-
         if valid_records:
             cur.executemany(
                 "INSERT INTO clean_uld (id, uld_code) VALUES (%s, %s)",
@@ -100,7 +108,7 @@ def process_valid_records(database: PostgresResource, valid_records: List[Tuple[
 
 # 4. Branch B: Process Invalid (Auto-Repair & Load)
 @asset
-def process_invalid_records(database: PostgresResource, invalid_records: List[Tuple[int, str, str]]):
+def process_invalid_records(database: PostgresResource, invalid_records: List[Tuple[int, str, str, str]]):
     """
     Attempts to repair invalid records by removing spaces.
     - If repaired code is valid → saves to enriched_uld with action_taken='Repaired'.
@@ -109,7 +117,7 @@ def process_invalid_records(database: PostgresResource, invalid_records: List[Tu
     repaired_records = []
     truly_invalid_records = []
 
-    for id_, code, reason in invalid_records:
+    for id_, code, original_code, reason in invalid_records:
         # Attempt repair: strip all spaces
         fixed_code = code.replace(" ", "").upper()
 
@@ -117,9 +125,9 @@ def process_invalid_records(database: PostgresResource, invalid_records: List[Tu
             # It's now valid! Enrich it.
             owner_code = fixed_code[8:]
             airline_name = AIRLINE_CODES.get(owner_code, "Unknown Airline")
-            # original_code = original (with spaces), action_taken = note about repair
+            # original_code = the raw code BEFORE any cleanup (preserves spaces/casing)
             repaired_records.append(
-                (id_, fixed_code, owner_code, airline_name, code, "Repaired: Removed Spaces")
+                (id_, fixed_code, owner_code, airline_name, original_code, "Repaired: Removed Spaces")
             )
         else:
             truly_invalid_records.append((id_, code, reason))
@@ -127,7 +135,7 @@ def process_invalid_records(database: PostgresResource, invalid_records: List[Tu
     conn = database.get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("DELETE FROM invalid_uld")
+        # Note: DELETE is now handled in raw_uld_records before the pipeline forks.
 
         # Repaired records go into enriched_uld (they are now valid!)
         if repaired_records:

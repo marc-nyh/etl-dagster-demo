@@ -20,6 +20,7 @@ class PostgresResource(ConfigurableResource):
 
 # Define the resource configuration
 # In a real app, use EnvVar("POSTGRES_PASSWORD") instead of hardcoding!
+# An instance of PostgresResource named db_resource which will be used by Definations
 db_resource = PostgresResource(
     host="postgres",  # Docker service name
     user="etl_user",
