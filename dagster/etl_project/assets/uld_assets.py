@@ -1,23 +1,8 @@
 from dagster import asset, multi_asset, AssetOut, Output, MaterializeResult
-import re
 from typing import List, Tuple, Any
 from ..resources import PostgresResource
+from ..config import ULD_PATTERN, AIRLINE_CODES
 
-# --- Constants ---
-
-# Example ULD codes: [AKN 12345 DL]
-ULD_PATTERN = re.compile(r"^[A-Z]{3}[0-9]{5}[A-Z]{2,3}$")
-
-AIRLINE_CODES = {
-    "SQ": "Singapore Airlines",
-    "MH": "Malaysia Airlines",
-    "CX": "Cathay Pacific",
-    "EK": "Emirates",
-    "UA": "United Airlines",
-    "BA": "British Airways",
-    "QF": "Qantas",
-    "DHL": "DHL Aviation",   # 3-letter code
-}
 
 # --- Assets ---
 
